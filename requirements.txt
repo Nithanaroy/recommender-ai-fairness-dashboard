@@ -25,3 +25,4 @@ bokeh==1.4.*
 panel==0.7.0 
 datashader 
 holoviews[recommended]==1.12.7
+scikit-learn
