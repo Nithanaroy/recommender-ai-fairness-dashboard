@@ -49,6 +49,10 @@ ADCATID = "AdCatId"
 ADCATNAME = "AdCatName"
 ADCATNUMADS = "AdCatNumAds"
 
+AGE_BUCKET = AGE + "_bucket"
+AGE_BUCKET_BOUNDARIES = [0, 20, 40, 100] # refer pandas.cut() for syntax on binning
+AGE_LABELS = ["young", "middle-age", "old"] # refer pandas.cut() for syntax on labels
+
 EOD = "Equal Opportunity Difference"
 AOD = "Average Odds Difference"
 FPR = "False Positive Rate"
@@ -141,11 +145,8 @@ class GroupFairnessMetrics:
         raise NotImplementedError("TODO")
 
 
-def plot_for_metric_class(metric_df:pd.DataFrame, metric:str="FPR", rating_class:int=1):
-    """Generates plot for metric and given rating_class from metric_df indexed by dimension of interest"""
-    plot_df = metric_df.apply(lambda m: m["fairness_metrics_per_class"][metric][rating_class], axis=1)
-    plot_df = plot_df.reset_index().rename({0: metric}, axis=1)
-    return plot_df
+def extract_metric_from_base_metrics(metrics_df:pd.DataFrame, metric:str="FPR", rating_class:int=1) -> pd.Series:
+    return metrics_df.apply(lambda m: m["fairness_metrics_per_class"][metric][rating_class], axis=1)
 
 
 def extract_ad_category_id(s:str):
@@ -156,7 +157,7 @@ def extract_ad_category_id(s:str):
 def test_extract_ad_category_id():
     assert extract_ad_category_id("A08_09") == 8
     assert extract_ad_category_id("A12_19") == 12
-    print("All tests passed")
+    logging.info("All tests passed")
     
 test_extract_ad_category_id()
 
@@ -164,14 +165,39 @@ test_extract_ad_category_id()
 ad_categories = pd.read_csv("data/AdCats.csv")
 
 
-def fetch_gender_metrics(inference_df):
+def fetch_gender_metrics(inference_df) -> Dict[str, pd.Series]:
     gfm = GroupFairnessMetrics(inference_df, GENDER)
 
-    fpr = plot_for_metric_class(gfm.fetch_base_metrics())
+    fpr = extract_metric_from_base_metrics(gfm.fetch_base_metrics(), "FPR")
     eod = gfm.equal_opportunity_difference("F", "M")
     aod = gfm.average_odds_difference("F", "M")
     
-    metrics = {FPR: fpr, EOD: eod, AOD: aod}
+    metrics = {FPR: fpr, EOD: pd.Series({"Priv=F, UnPriv=M": eod}), AOD: pd.Series({"Priv=F, UnPriv=M": aod})}
+    return metrics
+
+
+def fetch_age_metrics(inference_df:pd.DataFrame) -> Dict[str, pd.Series]:
+    inference_df[AGE] = inference_df[AGE].astype("int")
+    inference_df[AGE_BUCKET] = pd.cut(inference_df[AGE], bins=AGE_BUCKET_BOUNDARIES, labels=AGE_LABELS)
+    gfm = GroupFairnessMetrics(inference_df, AGE_BUCKET)
+
+    fpr = extract_metric_from_base_metrics(gfm.fetch_base_metrics())
+
+    eod_ym = gfm.equal_opportunity_difference("young", "middle-age")
+    eod_yo = gfm.equal_opportunity_difference("young", "old")
+
+    aod_ym = gfm.average_odds_difference("young", "middle-age")
+    aod_yo = gfm.average_odds_difference("young", "old")
+
+    metrics = {
+        FPR: fpr, 
+        EOD: pd.Series(
+            {"Priv=young, UnPriv=midle-age": eod_ym, "Priv=young, UnPriv=old": eod_yo}
+        ),
+        AOD: pd.Series(
+            {"Priv=young, UnPriv=middle-age": aod_ym, "Priv=young, UnPriv=old": aod_yo}
+        )
+    }
     return metrics
 
 
@@ -183,8 +209,13 @@ def fetch_model_metrics_for_feature_on_dataset(model_id:str, feature:str, ad_cat
     
     if ad_category.lower() != "all":
         df = df[df[ADCATNAME] == ad_category]
+        
+    feature_metrics_map = {
+        GENDER: fetch_gender_metrics,
+        AGE: fetch_age_metrics
+    }
     
-    metrics = fetch_gender_metrics(df)
+    metrics = feature_metrics_map[feature](df)
     metrics.update({"plot_count": df.shape[0], "total_count": total_count})
     return metrics
 
@@ -202,13 +233,23 @@ def fetch_all_models_metrics_for_feature_on_dataset(feature:str, ad_category:str
     return state
 
 
-common_opts = opts(show_grid=True) #, tools=["hover"]
-gfm_opts = opts(ylabel="Closer to zero, the better", height=300, ylim=(-1, 1))
-fpr_opts = opts(ylim=(0, 1), height=200)
+common_opts = opts(show_grid=True, height=200, width=300, tools=["hover"])
+gfm_opts = opts(ylabel="Closer to zero, the better", ylim=(-1, 1))
+fpr_opts = opts(ylim=(0, 1))
+
+
+def chart_for_metric(state:Dict, metric:str, viz_opts=opts()):
+    bar_charts = []
+    for g in state[M1][metric].keys():
+        chart_data = [(state[model]["label"], state[model][metric][g]) for model in state.keys()]
+        bar_chart = hv.Bars(chart_data, hv.Dimension(f'Models for {g}'), " ").opts(common_opts).opts(viz_opts)
+        bar_charts.append(bar_chart)
+
+    return hv.Layout(bar_charts).opts(shared_axes=False, title=metric).cols(1) # TODO: Title disturbs the layout
 
 
 class AdsFairnessExplorer(param.Parameterized):
-    protected_features = [GENDER]
+    protected_features = [GENDER, AGE]
     ad_types = ['All', 'Kitchen & Home', 'Office Products', 'Dating Sites',
        'Clothing & Shoes', 'Betting', 'Musical Instruments', 'Grocery',
        'DIY & Tools', 'Toys & Games', 'Media (BMVD)',
@@ -220,29 +261,6 @@ class AdsFairnessExplorer(param.Parameterized):
     protected_feature = param.Selector(sorted(protected_features), default=GENDER)
     ad_category = param.Selector(sorted(ad_types), default='All')
 
-    def make_fpr(self, state:Dict):
-        fpr_bars = []
-        for g in ["F", "M"]:
-            fpr_data = []
-            for model in state.keys():
-                name, fpr = state[model]["label"], state[model][FPR]
-                fpr_data.append((name, fpr[fpr[GENDER] == g]["FPR"].tolist()[0]))
-            fpr_bar = hv.Bars(fpr_data, hv.Dimension(f'For {g}'), FPR).opts(common_opts).opts(fpr_opts)
-            fpr_bars.append(fpr_bar)
-
-        fpr_chart = hv.Layout(fpr_bars).opts(opts.Layout(shared_axes=False, title=" ")).cols(1) # TODO: Title disturbs the layout
-        return fpr_chart
-
-    def make_eod(self, state:Dict):
-        eod_data = [(state[m]["label"], state[m][EOD]) for m in state.keys()]
-        eod_bars = hv.Bars(eod_data, hv.Dimension('Priv=F, Unpriv=M'), " ").opts(common_opts).opts(gfm_opts).opts(title=EOD)
-        return eod_bars
-    
-    def make_aod(self, state:Dict):
-        aod_data = [(state[m]["label"], state[m][AOD]) for m in state.keys()]
-        aod_bars = hv.Bars(aod_data, hv.Dimension('Priv=F, Unpriv=M'), " ").opts(common_opts).opts(gfm_opts).opts(title=AOD)
-        return aod_bars
-    
     @param.depends('protected_feature', "ad_category")
     def make_view(self):
         state = fetch_all_models_metrics_for_feature_on_dataset(self.protected_feature, self.ad_category)
@@ -250,24 +268,21 @@ class AdsFairnessExplorer(param.Parameterized):
         plotted_records_count = reduce(lambda acc, model_stats: model_stats["plot_count"] + acc, state.values(), 0)
         num_models = len(state.values())
         html_stats_div = lambda s: f"""<p style="text-align: center; margin-top: 3rem;">{s}</p>"""
+        stats_text = html_stats_div(f"{self.ad_category} ad category has {plotted_records_count / num_models:.2f} records of {total_records_count / num_models:.0f} records in total on an average")
         
-        gspec = pn.GridSpec(width=900, sizing_mode='scale_height')
-        gspec[0, 0] = self.make_fpr(state)
-        gspec[0, 1] = self.make_eod(state)
-        gspec[0, 2] = self.make_aod(state)
-        gspec[1, :] = html_stats_div(f"{self.ad_category} ad category has {plotted_records_count / num_models:.2f} records of {total_records_count / num_models:.0f} records in total on an average")
-
+        gspec = pn.GridSpec(sizing_mode="stretch_both", align="center") # background="gray"
+        gspec[:15, :2] = chart_for_metric(state, FPR, fpr_opts)
+        gspec[:15, 2:4] = chart_for_metric(state, EOD, gfm_opts)
+        gspec[:15, 4:6] = chart_for_metric(state, AOD, gfm_opts)
+        gspec[15, :] =  stats_text
+        
         return gspec
 
 explorer = AdsFairnessExplorer()
 
 
-gspec = pn.GridSpec(sizing_mode="scale_both")
-gspec[0, :2] = pn.Row("## Fairness in Ads Dashboard")
-gspec[1, :1] = explorer.param
-gspec[2, :2] = explorer.make_view
-
-gspec.servable(title="Fairness in Ads Dashboard")
+dashboard = pn.Column("## Fairness in Ads Dashboard", explorer.param, explorer.make_view)
+dashboard.servable(title="Fairness in Ads Dashboard")
 
 
 
