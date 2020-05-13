@@ -54,7 +54,7 @@
     <p>We focussed on biases in <strong>Gender</strong> and <strong>Age</strong> when recommending ads. Try changing the controls to observe how each
         model performs and how effective each mitigation algorithm was in reducing bias. <mark>It may take a few seconds
             for the charts to update on changing any controls as this deployed on commodity hardware on a free hosting
-            serving</mark>. We made sure something on the dashboard changes on any changes to controls. So please wait before firing another request :)</p>
+            service</mark>. We made sure something on the dashboard changes on any changes to controls. So please wait before firing another request :)</p>
 
     <p class="lead">Please share your thoughts at <a
             href="https://devpost.com/software/impact-of-user-personality-for-advertisement-recommendation#updates"
