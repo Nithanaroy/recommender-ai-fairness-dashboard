@@ -233,7 +233,7 @@ def fetch_all_models_metrics_for_feature_on_dataset(feature:str, ad_category:str
     return state
 
 
-common_opts = opts(show_grid=True, height=200, width=300, tools=["hover"])
+common_opts = opts(show_grid=True, height=200, width=300) #, tools=["hover"]
 gfm_opts = opts(ylabel="Closer to zero, the better", ylim=(-1, 1))
 fpr_opts = opts(ylim=(0, 1))
 
@@ -281,7 +281,11 @@ class AdsFairnessExplorer(param.Parameterized):
 explorer = AdsFairnessExplorer()
 
 
-dashboard = pn.Column("## Fairness in Ads Dashboard", explorer.param, explorer.make_view)
+with open("header.html.partial", "r") as f:
+    header = f.read()
+
+
+dashboard = pn.Column(pn.pane.HTML(header), explorer.param, explorer.make_view)
 dashboard.servable(title="Fairness in Ads Dashboard")
 
 

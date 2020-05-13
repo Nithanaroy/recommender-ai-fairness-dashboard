@@ -1,0 +1,67 @@
+<style>
+    #model-info td {
+        text-align: left;
+    }
+</style>
+
+<div class="p-3">
+    <h1 class="display-5">Fairness in Ad Recommender Systems</h1>
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"
+        integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"
+        integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI"
+        crossorigin="anonymous"></script>
+
+    <p>This dashboard showcases the final results from our team's <a
+            href="https://devpost.com/software/impact-of-user-personality-for-advertisement-recommendation"
+            target="_blank">Responsible AI hackathon</a> project. <a href="https://docs.google.com/document/d/1Ru5YaVLOYghM2T0usLzroyKGe5ySjJxgAHYm4JMeRFk/edit#" target="_blank" rel="noopener noreferrer">Our proposal</a> describes how we identified and mitigated bias in recommendation systems serving ads. This dashboard shows the results from three such models.
+    </p>
+    <table id="model-info" class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Model name</th>
+                <th>About the model</th>
+            </tr>
+        </thead>
+        <tr>
+            <th>Base model</th>
+            <td>This is the base model without any bias mitigation algorithms</td>
+        </tr>
+        <tr>
+            <th>M2 model</th>
+            <td>A model that has been trained on data whose target classes have been balanced by SMOTE algorithm</td>
+        </tr>
+        <tr>
+            <th>M3 model</th>
+            <td>A model that has been trained on data where individual samples have been weighed to reduce bias, using
+                algorithms from https://aif360.mybluemix.net/</td>
+        </tr>
+    </table>
+
+    <p>
+        These models are compared using three fairness metrics - <a
+            href="https://docs.google.com/document/d/1Ru5YaVLOYghM2T0usLzroyKGe5ySjJxgAHYm4JMeRFk/edit#heading=h.obhgd91gt55g"
+            target="_blank">False positive rate</a>, <a
+            href="https://docs.google.com/document/d/1Ru5YaVLOYghM2T0usLzroyKGe5ySjJxgAHYm4JMeRFk/edit#heading=h.y0mg4borzro1"
+            target="_blank">equal opportunity difference</a> and <a
+            href="https://docs.google.com/document/d/1Ru5YaVLOYghM2T0usLzroyKGe5ySjJxgAHYm4JMeRFk/edit#heading=h.dib97rygdulz"
+            target="_blank">average odds difference</a>. These are standard metrics widely used in the industry and
+        <a href="https://aif360.mybluemix.net/resources#glossary" target="_blank" rel="noopener noreferrer">this
+            glossary</a> can be a helpful resource to learn more about them.
+    </p>
+
+    <p>We focussed on biases in <strong>Gender</strong> and <strong>Age</strong> when recommending ads. Try changing the controls to observe how each
+        model performs and how effective each mitigation algorithm was in reducing bias. <mark>It may take a few seconds
+            for the charts to update on changing any controls as this deployed on commodity hardware on a free hosting
+            serving</mark>. We made sure something on the dashboard changes on any changes to controls. So please wait before firing another request :)</p>
+
+    <p class="lead">Please share your thoughts at <a
+            href="https://devpost.com/software/impact-of-user-personality-for-advertisement-recommendation#updates"
+            target="_blank"
+            rel="noopener noreferrer">https://devpost.com/software/impact-of-user-personality-for-advertisement-recommendation#updates</a>
+    </p>
+
+    <br />
+    <br />
+</div>
